@@ -21,6 +21,7 @@ var queryUrl = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&
 
 console.log(queryUrl)
 
+// Determine the color for markers and legend based on earthquake magnitude
 function getColor(d) {
   console.log("doin a color")
   return d > 5  ? '#BD0026' :
@@ -31,23 +32,19 @@ function getColor(d) {
                    '#FFEDA0';
 }
 
-// Perform a GET request to the query URL
-d3.json(queryUrl, function(data) {
-  // Once we get a response, send the data.features object to the createFeatures function
-  createFeatures(data.features);
-});
-
-function createFeatures(earthquakeData) {
+// function for creating markers and bound pop-ups
+function createFeatures(earthquakeData, tectonicData) {
 
   // Define a function we want to run once for each feature in the features array
-  // Give each feature a popup describing the place and time of the earthquake
   function onEachFeature(feature, layer) {
+    // If there is no"felt x miles away" record, don't include it in the popup
     if (feature.properties.felt === null || feature.properties.felt === undefined){
+      //show popup with magnitude and time of the earthquake
       htmlStr = "<h3>Magnitude: " + feature.properties.mag +
       "</h3><hr><p>" + new Date(feature.properties.time) + "</p>"
     }
     else{
-
+      //show popup with magnitude, felt x miles away, and time of the earthquake
       htmlStr = "<h3>Magnitude: " + feature.properties.mag + `, Felt ${feature.properties.felt} Miles Away` +
       "</h3><hr><p>" + new Date(feature.properties.time) + "</p>"
     }
@@ -59,6 +56,8 @@ function createFeatures(earthquakeData) {
   var earthquakes = L.geoJSON(earthquakeData, {
 
     pointToLayer: function (feature, latlng) {
+
+      //define the marker colors as markers with color and size dependent on magnitude
       var geojsonMarkerOptions = {
         radius: feature.properties.mag * 1.5,
         fillColor: getColor(feature.properties.mag),
@@ -68,17 +67,29 @@ function createFeatures(earthquakeData) {
         fillOpacity: 0.8
       };
 
+      // Put a circular maker on each feature
       return L.circleMarker(latlng, geojsonMarkerOptions);
     },
     onEachFeature: onEachFeature
   });
 
+  var myStyle = {
+    "color": "#ff7800",
+    "weight": 1,
+    "opacity": 0.65
+  };
+
+  // Create a GeoJson layer containing the tectonic plates features array 
+  var plates = L.geoJSON(tectonicData, {
+    style: myStyle
+  });
 
   // Sending our earthquakes layer to the createMap function
-  createMap(earthquakes);
+  createMap(earthquakes, plates);
 }
 
-function createMap(earthquakes) {
+// function for creating base map, legend, and control
+function createMap(earthquakes, plates) {
 
   // Define streetmap and darkmap layers
   var outdoorsmap = L.tileLayer("https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}", {
@@ -111,14 +122,15 @@ function createMap(earthquakes) {
 
   // Create overlay object to hold our overlay layer
   var overlayMaps = {
-    Earthquakes: earthquakes
+    Earthquakes: earthquakes,
+    Plates: plates
   };
 
   // Create our map, giving it the streetmap and earthquakes layers to display on load
   var myMap = L.map("map", {
     center: mapCenter,
     zoom: 3,
-    layers: [satellite, earthquakes]
+    layers: [satellite, earthquakes, plates]
   });
 
   // Create a layer control
@@ -153,4 +165,18 @@ function createMap(earthquakes) {
   legend.addTo(myMap);
 
 }
+
+// Perform a GET request to the query URL
+d3.json(queryUrl, function(quakeData) {
+
+  // Pull tectonic plate data from json
+  d3.json("assets/js/PB2002_boundaries.json", function(tectonicData) {
+
+    console.log(tectonicData)
+    // Once we get a response for both jsons, send the data.features object to the createFeatures function
+    createFeatures(quakeData.features, tectonicData.features);
+
+  });
+
+});
 
